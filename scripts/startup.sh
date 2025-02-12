@@ -278,17 +278,17 @@ esac
 
 # @description Disk selection for drive to be used with installation.
 diskpart () {
+# echo -ne "
+# ------------------------------------------------------------------------
+#     THIS WILL FORMAT AND DELETE ALL DATA ON THE DISK
+#     Please make sure you know what you are doing because
+#     after formating your disk there is no way to get data back
+# ------------------------------------------------------------------------
+
+# "
+
 echo -ne "
-------------------------------------------------------------------------
-    THIS WILL FORMAT AND DELETE ALL DATA ON THE DISK
-    Please make sure you know what you are doing because
-    after formating your disk there is no way to get data back
-------------------------------------------------------------------------
-
-"
-
-PS3='
-Select the disk to install on: '
+Select the disk to install on: "
 options=($(lsblk -n --output TYPE,KNAME,SIZE | awk '$1=="disk"{print "/dev/"$2"|"$3}'))
 
 select_option $? 1 "${options[@]}"
@@ -296,6 +296,43 @@ disk=${options[$?]%|*}
 
 echo -e "\n${disk%|*} selected \n"
     set_option DISK ${disk%|*}
+
+# --- Root Partition Selection ---
+echo -ne "
+Select the root partition of the selected disk: "
+# List partitions for the selected disk
+options=($(lsblk -n --output TYPE,KNAME,SIZE "${disk}" | awk '$1=="part"{print "/dev/"$2"|"$3}'))
+select_option $? 2 "${options[@]}"
+root_index=$?
+root_partition=${options[$root_index]%%|*}
+echo -e "\n${root_partition} selected as the root partition\n"
+set_option ROOT "${root_partition}"
+set_option ENCRYPTED_PARTITION_UUID "$(blkid -s UUID -o value ${root_partition})"
+# --- EFI Partition Selection ---
+echo -ne "
+Select the EFI partition of the selected disk: "
+# Build a new list of partitions excluding the one chosen as root.
+efi_options=()
+for opt in "${options[@]}"; do
+    # Extract the device name (before the |)
+    part_dev="${opt%%|*}"
+    # Exclude the partition if it is already used as the root partition.
+    if [[ "$part_dev" != "$root_partition" ]]; then
+        efi_options+=("$opt")
+    fi
+done
+if [ ${#efi_options[@]} -eq 0 ]; then
+    echo -e "\nNo additional partitions available for EFI selection on ${disk}.\n"
+    set_option EFI ""
+else
+    # Use the new list for EFI selection.
+    options=("${efi_options[@]}")
+    select_option $? 2 "${options[@]}"
+    efi_index=$?
+    efi_partition=${options[$efi_index]%%|*}
+    echo -e "\n${efi_partition} selected as the EFI partition\n"
+    set_option EFI "${efi_partition}"
+fi
 
 drivessd
 }
