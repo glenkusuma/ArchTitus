@@ -43,6 +43,9 @@ echo -ne "
 
     confirm_continue
 
+    # skipping 0-preinstall.sh - need to copy the whole script dir to stage the next step.
+    cp -R ${SCRIPT_DIR} /mnt/root/ArchTitus
+
     ( arch-chroot /mnt $HOME/ArchTitus/scripts/1-setup.sh )|& tee 1-setup.log
     
     confirm_continue
